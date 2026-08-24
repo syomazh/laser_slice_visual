@@ -9,6 +9,11 @@ export ready-to-cut SVGs.
 Only the "stacked horizontal" construction technique is implemented (each
 layer is one flat slab cut from sheet stock and glued on top of the next).
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/deba3709-c26e-4c94-8e69-a58c3a7abc2c" alt="stack_preview" height="500">
+  <img src="https://github.com/user-attachments/assets/053511f5-5f40-4e66-8c06-ea2e5fb1f073" alt="overview" height="500">
+</p>
+
 ## Install
 
 ```
