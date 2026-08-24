@@ -1,0 +1,26 @@
+[project]
+name = "laser-slice"
+version = "0.1.0"
+description = "Turn a 3D model into stacked, laser-cuttable horizontal layers (SVG, auto-nested)."
+requires-python = ">=3.10"
+dependencies = [
+    "trimesh>=4.0",
+    "manifold3d",
+    "shapely>=2.0",
+    "svgwrite>=1.4",
+    "numpy",
+    "matplotlib",
+    "scipy",
+    "networkx",
+    "rtree",
+]
+
+[project.scripts]
+laser-slice = "laser_slice.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["laser_slice*"]
