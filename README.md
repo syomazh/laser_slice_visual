@@ -119,7 +119,8 @@ layer-boundary planes, plus a thumbnail grid of every layer's silhouette --
 useful for a quick headless sanity check). Unless `--no-visualize` is passed,
 an interactive matplotlib window also opens with a slider to scrub through
 layers, showing the 3D slice plane, that layer's 2D shape + engraving, and
-its position on its nested sheet.
+its position on its nested sheet. Press `Up` to advance to the next layer or
+`Down` to return to the previous layer; the slider stays synchronized.
 
 ### "What will it actually look like?" -- the stack preview
 

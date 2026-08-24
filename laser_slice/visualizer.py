@@ -340,6 +340,7 @@ def show_interactive(mesh, layers: list[LayerSlice], sheets: list[SheetLayout], 
     the selected layer's z_mid, (2) that layer's 2D silhouette plus its
     engrave strokes, (3) the sheet layout containing that layer with the
     current part outlined -- driven by a Slider that scrubs the layer index.
+    The Up and Down arrow keys advance to the next and previous layer.
 
     If no display/interactive backend is available, this prints a message
     and returns normally instead of raising (the caller is expected to have
@@ -439,13 +440,29 @@ def show_interactive(mesh, layers: list[LayerSlice], sheets: list[SheetLayout], 
         draw_layer(0)
 
         slider = None
+        key_press_handler = None
+        key_press_connection = None
         if len(layers) > 1:
             slider_ax = fig.add_axes([0.15, 0.06, 0.7, 0.04])
-            slider = Slider(slider_ax, "layer", 0, len(layers) - 1, valinit=0, valstep=1)
+            slider = Slider(slider_ax, "layer (Up/Down keys)", 0, len(layers) - 1, valinit=0, valstep=1)
             slider.on_changed(lambda val: draw_layer(int(val)))
+
+            def on_key_press(event) -> None:
+                step = {"up": 1, "down": -1}.get(event.key)
+                if step is None:
+                    return
+                current_index = int(slider.val)
+                next_index = max(0, min(len(layers) - 1, current_index + step))
+                if next_index != current_index:
+                    slider.set_val(next_index)
+
+            key_press_handler = on_key_press
+            key_press_connection = fig.canvas.mpl_connect("key_press_event", on_key_press)
         # Keep references alive on the figure (avoids GC of the widget/state).
         fig._laser_slice_slider = slider
         fig._laser_slice_state = state
+        fig._laser_slice_key_press_handler = key_press_handler
+        fig._laser_slice_key_press_connection = key_press_connection
 
         plt.show()
     except Exception as exc:
