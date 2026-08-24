@@ -41,8 +41,9 @@ class Part:
     # Final outer silhouette with holes (object holes + registration holes),
     # already kerf-compensated. Polygon or MultiPolygon.
     cut_geometry: BaseGeometry
-    # Vector engraving strokes (e.g. the layer number), in the same local frame
-    # as cut_geometry (i.e. before any nesting translation/rotation is applied).
+    # Vector engraving strokes (e.g. one layer number per disconnected piece),
+    # in the same local frame as cut_geometry (i.e. before any nesting
+    # translation/rotation is applied).
     engrave_strokes: list[EngraveGlyph] = field(default_factory=list)
     # (x, y) model-space points (same frame as cut_geometry) where registration
     # holes were actually cut on this part (subset of requested registration points).

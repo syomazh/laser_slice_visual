@@ -56,8 +56,10 @@ class Config:
     # --- engraving ---
     engrave_enabled: bool = True
     engrave_text_height_mm: float = 4.0
+    """Maximum layer-number height; labels shrink to fit smaller cut pieces."""
     engrave_margin_mm: float = 3.0
-    """Distance from a part's bounding box edge to the engraved layer number."""
+    """Target clearance from a layer number to exterior and hole boundaries.
+    Automatically reduced only when a cut piece is too narrow to preserve it."""
     engrave_stroke_width_mm: float = 0.15
 
     # --- output ---

@@ -3,8 +3,8 @@
 Turn a 3D model into a stack of horizontal, laser-cuttable layers: load an OBJ/STL,
 slice it into slabs matching your material thickness, auto-nest the layer
 silhouettes onto sheets, optionally punch dowel/registration holes so the stack
-lines up when glued, optionally engrave each layer with its layer number, and
-export ready-to-cut SVGs.
+lines up when glued, optionally engrave every disconnected piece of each layer
+with its layer number, and export ready-to-cut SVGs.
 
 Only the "stacked horizontal" construction technique is implemented (each
 layer is one flat slab cut from sheet stock and glued on top of the next).
@@ -57,8 +57,8 @@ laser-slice INPUT.obj
   --reg-diameter MM      registration hole diameter (default 3.0, e.g. for a 1/8" dowel use 3.175)
   --reg-margin MM        required clearance around a registration hole (default 4.0)
   --no-engrave           disable engraving of layer numbers
-  --engrave-height MM    engraved digit height (default 4.0)
-  --engrave-margin MM    distance from a part's edge to its engraved number (default 3.0)
+  --engrave-height MM    maximum engraved digit height (default 4.0)
+  --engrave-margin MM    target clearance from a number to its cut edge (default 3.0)
   --out DIR              output directory (default output/)
   --no-visualize         skip the interactive viewer at the end
   --no-stack-preview     skip the physically-reconstructed stack preview (PNG + OBJ)
@@ -78,15 +78,21 @@ both, coordinates are assumed to already be millimeters.
 Each sheet is one SVG sized in real millimeters (`viewBox` matches
 width/height 1:1, so it imports at true physical scale). Each physical slice
 is a top-level SVG group named `layer-n` (using its zero-based layer index),
-so moving that group keeps its cut geometry and engraved number together.
+so moving that group keeps its cut geometry and all engraved numbers together.
 Each layer contains two operation groups:
 
 - **Cut** (`id="layer-n-cut"`, red `#FF0000` stroke, no fill) -- the outer
   silhouette plus every hole (object holes from the mesh cross-section and
   registration holes). It contains one path per polygon, with its exterior
   ring and every hole ring as subpaths.
-- **Engrave** (`id="layer-n-engrave"`, blue `#0000FF` stroke) -- the
-  vector-stroke layer number, positioned near the part's bottom-left corner.
+- **Engrave** (`id="layer-n-engrave"`, blue `#0000FF` stroke) -- one copy of
+  the vector-stroke layer number safely fitted inside every disconnected cut
+  piece. Labels avoid exterior edges and holes, move to a safer interior pocket
+  when needed, and shrink below `--engrave-height` on smaller pieces. The target
+  `--engrave-margin` is reduced proportionally only when a piece is too narrow
+  to preserve it. A piece narrower than the visible engraving stroke cannot
+  safely hold any number, so it is skipped with a warning rather than drawing
+  across its cut edge.
 
 In LightBurn, map the red layer to a Cut operation and the blue layer to a
 Line/engrave operation.
@@ -153,6 +159,7 @@ laser_slice/
   registration.py    dowel-hole point selection + cutting
   nesting.py         bounding-box shelf packing onto sheets
   fonts.py           hand-coded vector digit font for engraving
+  engraving.py       safe per-piece layer-number placement and fitting
   svg_export.py      final SVG writer
   stack_preview.py   reconstructs the actual physical (stairstepped) 3D stack
   visualizer.py      matplotlib overview + interactive viewer + stack preview

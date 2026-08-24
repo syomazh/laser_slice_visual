@@ -5,9 +5,11 @@ import re
 import xml.etree.ElementTree as ET
 
 import pytest
-from shapely.geometry import MultiPolygon, Point, Polygon, box
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
+from shapely.ops import unary_union
 
 from laser_slice.config import Config
+from laser_slice.engraving import layer_number_strokes
 from laser_slice.geometry_types import EngraveGlyph, Part, Placement, SheetLayout
 from laser_slice.svg_export import export_sheets
 
@@ -112,6 +114,8 @@ def test_cut_and_engrave_groups_have_expected_style(tmp_path):
     assert engrave_group.attrib["stroke"] == "#0000FF"
     assert engrave_group.attrib["fill"] == "none"
     assert float(engrave_group.attrib["stroke-width"]) == pytest.approx(config.engrave_stroke_width_mm)
+    assert engrave_group.attrib["stroke-linecap"] == "round"
+    assert engrave_group.attrib["stroke-linejoin"] == "round"
 
 
 def test_each_layer_groups_its_cut_geometry_and_engraving(tmp_path):
@@ -198,6 +202,12 @@ def _extract_points(d: str) -> set[tuple[float, float]]:
     return {(round(coords[i], 3), round(coords[i + 1], 3)) for i in range(0, len(coords), 2)}
 
 
+def _extract_ordered_points(d: str) -> list[tuple[float, float]]:
+    nums = re.findall(r"-?\d+(?:\.\d+)?", d)
+    coords = [float(n) for n in nums]
+    return [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
+
+
 def test_placement_rotate_translate_and_y_flip_contract(tmp_path):
     # A 4x2 box rotated 90 degrees about its own bbox center, then translated
     # so the rotated bbox's min corner sits at (5, 10), on a sheet of height 20.
@@ -223,3 +233,52 @@ def test_placement_rotate_translate_and_y_flip_contract(tmp_path):
     points = _extract_points(paths[0].attrib["d"])
     expected = {(7.0, 10.0), (7.0, 6.0), (5.0, 6.0), (5.0, 10.0)}
     assert points == expected
+
+
+def test_fitted_engraving_stays_inside_after_svg_rounding(tmp_path):
+    config = Config(
+        engrave_text_height_mm=8.0,
+        engrave_margin_mm=1.0,
+        engrave_stroke_width_mm=0.15,
+    )
+    geometry = box(0.1234564, 0.2345676, 8.1234564, 6.2345676)
+    part = Part(
+        layer_index=0,
+        cut_geometry=geometry,
+        engrave_strokes=layer_number_strokes(geometry, layer_index=0, config=config),
+    )
+    sheet = SheetLayout(
+        sheet_index=0,
+        width_mm=30.0,
+        height_mm=30.0,
+        placements=[
+            Placement(
+                part=part,
+                sheet_index=0,
+                x_offset_mm=5.1234564,
+                y_offset_mm=7.2345676,
+                rotation_deg=90.0,
+            )
+        ],
+    )
+
+    [svg_path] = export_sheets([sheet], config, str(tmp_path))
+    root = ET.parse(svg_path).getroot()
+    cut_path = root.find(
+        f"{SVG_NS}g[@id='layer-0']/{SVG_NS}g[@id='layer-0-cut']/{SVG_NS}path"
+    )
+    engrave_paths = root.findall(
+        f"{SVG_NS}g[@id='layer-0']/{SVG_NS}g[@id='layer-0-engrave']/{SVG_NS}path"
+    )
+
+    rounded_cut = Polygon(_extract_ordered_points(cut_path.attrib["d"]))
+    rounded_engraving = unary_union(
+        [LineString(_extract_ordered_points(path.attrib["d"])) for path in engrave_paths]
+    )
+    stroke_radius = config.engrave_stroke_width_mm / 2.0
+    required_centerline_clearance = config.engrave_margin_mm + stroke_radius
+
+    assert rounded_cut.boundary.distance(rounded_engraving) >= (
+        required_centerline_clearance - 0.00001
+    )
+    assert rounded_cut.buffer(0.00001).covers(rounded_engraving.buffer(stroke_radius))

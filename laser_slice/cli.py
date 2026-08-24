@@ -9,9 +9,8 @@ contracts each stage passes along):
       -> registration.auto_registration_points (once, whole job)
       -> registration.apply_registration_holes (per layer)
       -> build Part(...)
-      -> fonts.text_to_strokes                 (per part, before nesting,
-                                                 so the label rigidly moves
-                                                 with the part)
+      -> engraving.layer_number_strokes        (safely fitted per disconnected
+                                                 cut piece before nesting)
       -> polygon_ops.apply_kerf                (per part, LAST geometric
                                                  step, after registration
                                                  holes are already cut)
@@ -31,7 +30,7 @@ import re
 import sys
 
 from laser_slice import (
-    fonts,
+    engraving,
     mesh_io,
     nesting,
     polygon_ops,
@@ -123,11 +122,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--engrave-height", type=float, default=4.0, metavar="MM",
-        help="Engraved layer-number text height in mm (default: 4.0).",
+        help="Maximum engraved layer-number text height in mm (default: 4.0).",
     )
     parser.add_argument(
         "--engrave-margin", type=float, default=3.0, metavar="MM",
-        help="Distance from a part's bounding box edge to the engraved layer number, in mm (default: 3.0).",
+        help="Target clearance from each engraved number to its cut edge, in mm (default: 3.0).",
     )
 
     parser.add_argument(
@@ -208,14 +207,10 @@ def run(args: argparse.Namespace) -> int:
             )
 
         if config.engrave_enabled:
-            bbox_minx, bbox_miny, _, _ = part.cut_geometry.bounds
-            part.engrave_strokes = fonts.text_to_strokes(
-                str(layer.index),
-                height_mm=config.engrave_text_height_mm,
-                origin=(
-                    bbox_minx + config.engrave_margin_mm,
-                    bbox_miny + config.engrave_margin_mm,
-                ),
+            part.engrave_strokes = engraving.layer_number_strokes(
+                part.cut_geometry,
+                layer.index,
+                config,
             )
 
         part.cut_geometry = polygon_ops.apply_kerf(part.cut_geometry, config.kerf_mm)

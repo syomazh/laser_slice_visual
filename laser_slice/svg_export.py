@@ -144,6 +144,8 @@ def export_sheets(sheets: list[SheetLayout], config: Config, out_dir: str) -> li
                 stroke="#0000FF",
                 fill="none",
                 stroke_width=config.engrave_stroke_width_mm,
+                stroke_linecap="round",
+                stroke_linejoin="round",
             )
 
             for poly in _iter_polygons(cut_geom):
