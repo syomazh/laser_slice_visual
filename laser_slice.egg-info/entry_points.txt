@@ -1,2 +1,0 @@
-[console_scripts]
-laser-slice = laser_slice.cli:main

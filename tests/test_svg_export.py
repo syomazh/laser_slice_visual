@@ -95,27 +95,49 @@ def test_svg_well_formed_and_root_matches_sheet_size(tmp_path):
         assert root.attrib["viewBox"] == f"0 0 {sheet.width_mm} {sheet.height_mm}"
 
 
-def test_cut_and_engrave_groups_exist_with_expected_style(tmp_path):
+def test_cut_and_engrave_groups_have_expected_style(tmp_path):
     config = Config()
     sheets = _build_sheets(300.0, 600.0)
     written = export_sheets(sheets, config, str(tmp_path))
 
     tree = ET.parse(written[0])
     root = tree.getroot()
-    groups = {g.attrib.get("id"): g for g in root.findall(f"{SVG_NS}g")}
-
-    assert "cut" in groups
-    assert "engrave" in groups
-
-    cut_group = groups["cut"]
+    layer_group = root.find(f"{SVG_NS}g[@id='layer-0']")
+    cut_group = layer_group.find(f"{SVG_NS}g[@id='layer-0-cut']")
     assert cut_group.attrib["stroke"] == "#FF0000"
     assert cut_group.attrib["fill"] == "none"
     assert float(cut_group.attrib["stroke-width"]) == pytest.approx(0.1)
 
-    engrave_group = groups["engrave"]
+    engrave_group = layer_group.find(f"{SVG_NS}g[@id='layer-0-engrave']")
     assert engrave_group.attrib["stroke"] == "#0000FF"
     assert engrave_group.attrib["fill"] == "none"
     assert float(engrave_group.attrib["stroke-width"]) == pytest.approx(config.engrave_stroke_width_mm)
+
+
+def test_each_layer_groups_its_cut_geometry_and_engraving(tmp_path):
+    config = Config()
+    sheets = _build_sheets(300.0, 600.0)
+    written = export_sheets(sheets, config, str(tmp_path))
+
+    root1 = ET.parse(written[0]).getroot()
+    layer_groups1 = root1.findall(f"{SVG_NS}g")
+
+    assert [group.attrib["id"] for group in layer_groups1] == ["layer-0", "layer-1"]
+    assert len(layer_groups1[0].findall(f"{SVG_NS}g[@id='layer-0-cut']/{SVG_NS}path")) == 1
+    assert len(layer_groups1[0].findall(f"{SVG_NS}g[@id='layer-0-engrave']/{SVG_NS}path")) == 2
+    assert len(layer_groups1[1].findall(f"{SVG_NS}g[@id='layer-1-cut']/{SVG_NS}path")) == 2
+    assert len(layer_groups1[1].findall(f"{SVG_NS}g[@id='layer-1-engrave']/{SVG_NS}path")) == 1
+
+    root2 = ET.parse(written[1]).getroot()
+    layer_groups2 = root2.findall(f"{SVG_NS}g")
+
+    assert [group.attrib["id"] for group in layer_groups2] == ["layer-2"]
+    assert len(layer_groups2[0].findall(f"{SVG_NS}g[@id='layer-2-cut']/{SVG_NS}path")) == 1
+    assert len(layer_groups2[0].findall(f"{SVG_NS}g[@id='layer-2-engrave']/{SVG_NS}path")) == 0
+
+    for root in (root1, root2):
+        ids = [element.attrib["id"] for element in root.iter() if "id" in element.attrib]
+        assert len(ids) == len(set(ids))
 
 
 def test_cut_group_path_count_matches_polygon_count(tmp_path):
@@ -127,8 +149,11 @@ def test_cut_group_path_count_matches_polygon_count(tmp_path):
     # part_b is a MultiPolygon of 2 disjoint boxes -> 2 paths. Total = 3.
     tree1 = ET.parse(written[0])
     root1 = tree1.getroot()
-    cut_group1 = root1.find(f"{SVG_NS}g[@id='cut']")
-    cut_paths1 = cut_group1.findall(f"{SVG_NS}path")
+    cut_paths1 = [
+        path
+        for cut_group in root1.findall(f".//{SVG_NS}g[@class='cut']")
+        for path in cut_group.findall(f"{SVG_NS}path")
+    ]
     assert len(cut_paths1) == 3
 
     # Each cut path should contain exactly one hole subpath for part_a (2 'M's)
@@ -139,8 +164,11 @@ def test_cut_group_path_count_matches_polygon_count(tmp_path):
     # Sheet 2: single circular Polygon -> 1 path.
     tree2 = ET.parse(written[1])
     root2 = tree2.getroot()
-    cut_group2 = root2.find(f"{SVG_NS}g[@id='cut']")
-    cut_paths2 = cut_group2.findall(f"{SVG_NS}path")
+    cut_paths2 = [
+        path
+        for cut_group in root2.findall(f".//{SVG_NS}g[@class='cut']")
+        for path in cut_group.findall(f"{SVG_NS}path")
+    ]
     assert len(cut_paths2) == 1
 
 
@@ -151,8 +179,11 @@ def test_engrave_group_path_count_matches_glyph_count(tmp_path):
 
     tree1 = ET.parse(written[0])
     root1 = tree1.getroot()
-    engrave_group1 = root1.find(f"{SVG_NS}g[@id='engrave']")
-    engrave_paths1 = engrave_group1.findall(f"{SVG_NS}path")
+    engrave_paths1 = [
+        path
+        for engrave_group in root1.findall(f".//{SVG_NS}g[@class='engrave']")
+        for path in engrave_group.findall(f"{SVG_NS}path")
+    ]
     # part_a has 2 glyphs, part_b has 1 glyph => 3 total on sheet 1.
     assert len(engrave_paths1) == 3
     for p in engrave_paths1:
@@ -185,7 +216,7 @@ def test_placement_rotate_translate_and_y_flip_contract(tmp_path):
 
     tree = ET.parse(written[0])
     root = tree.getroot()
-    cut_group = root.find(f"{SVG_NS}g[@id='cut']")
+    cut_group = root.find(f"{SVG_NS}g[@id='layer-0']/{SVG_NS}g[@id='layer-0-cut']")
     paths = cut_group.findall(f"{SVG_NS}path")
     assert len(paths) == 1
 

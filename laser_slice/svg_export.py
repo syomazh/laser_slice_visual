@@ -127,16 +127,24 @@ def export_sheets(sheets: list[SheetLayout], config: Config, out_dir: str) -> li
             size=(f"{sheet.width_mm}mm", f"{sheet.height_mm}mm"),
             viewBox=f"0 0 {sheet.width_mm} {sheet.height_mm}",
         )
-        cut_group = dwg.g(id="cut", stroke="#FF0000", fill="none", stroke_width=0.1)
-        engrave_group = dwg.g(
-            id="engrave",
-            stroke="#0000FF",
-            fill="none",
-            stroke_width=config.engrave_stroke_width_mm,
-        )
-
         for placement in sheet.placements:
             cut_geom, strokes = _materialize_placement(placement)
+            layer_id = f"layer-{placement.part.layer_index}"
+            layer_group = dwg.g(id=layer_id)
+            cut_group = dwg.g(
+                id=f"{layer_id}-cut",
+                class_="cut",
+                stroke="#FF0000",
+                fill="none",
+                stroke_width=0.1,
+            )
+            engrave_group = dwg.g(
+                id=f"{layer_id}-engrave",
+                class_="engrave",
+                stroke="#0000FF",
+                fill="none",
+                stroke_width=config.engrave_stroke_width_mm,
+            )
 
             for poly in _iter_polygons(cut_geom):
                 d = _polygon_path_d(poly, sheet.height_mm)
@@ -148,8 +156,10 @@ def export_sheets(sheets: list[SheetLayout], config: Config, out_dir: str) -> li
                 if d:
                     engrave_group.add(dwg.path(d=d))
 
-        dwg.add(cut_group)
-        dwg.add(engrave_group)
+            layer_group.add(cut_group)
+            layer_group.add(engrave_group)
+            dwg.add(layer_group)
+
         dwg.save()
         written.append(filepath)
 

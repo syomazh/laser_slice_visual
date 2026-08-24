@@ -76,14 +76,17 @@ both, coordinates are assumed to already be millimeters.
 ## Output / SVG conventions (LightBurn-ready)
 
 Each sheet is one SVG sized in real millimeters (`viewBox` matches
-width/height 1:1, so it imports at true physical scale). Two layers:
+width/height 1:1, so it imports at true physical scale). Each physical slice
+is a top-level SVG group named `layer-n` (using its zero-based layer index),
+so moving that group keeps its cut geometry and engraved number together.
+Each layer contains two operation groups:
 
-- **Cut** (`id="cut"`, red `#FF0000` stroke, no fill) -- the outer silhouette
-  of every part plus every hole (object holes from the mesh cross-section,
-  and registration holes), each part as one `<path>` with the exterior ring
-  and every hole ring as separate subpaths.
-- **Engrave** (`id="engrave"`, blue `#0000FF` stroke) -- the vector-stroke
-  layer number for each part, positioned near its bottom-left corner.
+- **Cut** (`id="layer-n-cut"`, red `#FF0000` stroke, no fill) -- the outer
+  silhouette plus every hole (object holes from the mesh cross-section and
+  registration holes). It contains one path per polygon, with its exterior
+  ring and every hole ring as subpaths.
+- **Engrave** (`id="layer-n-engrave"`, blue `#0000FF` stroke) -- the
+  vector-stroke layer number, positioned near the part's bottom-left corner.
 
 In LightBurn, map the red layer to a Cut operation and the blue layer to a
 Line/engrave operation.

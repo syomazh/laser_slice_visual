@@ -1,0 +1,13 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local environments and tool caches
+.venv/
+.uv-cache/
+
+# Generated laser-cut exports
+/output/
+/outputtest/
