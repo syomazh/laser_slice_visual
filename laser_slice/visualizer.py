@@ -56,6 +56,13 @@ _UP_AXIS = 2  # world Z; see module docstring.
 _MESH_FACECOLOR = (0.75, 0.75, 0.8, 0.35)
 _MESH_EDGECOLOR = (0.25, 0.25, 0.25, 0.6)
 _BOUNDARY_COLOR = "tab:blue"
+_VIEW_ROTATION_STEP_DEG = 15.0
+_VIEW_PRESETS = {
+    "front": (0.0, -90.0),
+    "side": (0.0, 0.0),
+    "top": (90.0, -90.0),
+    "isometric": (30.0, -60.0),
+}
 
 
 # --------------------------------------------------------------------------
@@ -168,6 +175,56 @@ def _draw_all_boundaries(ax, bounds: np.ndarray, layers: list[LayerSlice], alpha
         ax.plot(pts[:, 0], pts[:, 1], pts[:, 2], color=_BOUNDARY_COLOR, linewidth=0.8, alpha=0.8)
         quad = Poly3DCollection([pts[:-1]], facecolor=_BOUNDARY_COLOR, alpha=alpha)
         ax.add_collection3d(quad)
+
+
+def _add_3d_view_controls(fig, ax3d, rect: tuple[float, float, float, float]) -> None:
+    """Add rotate and preset-view buttons for an interactive 3D axes."""
+    from matplotlib.widgets import Button
+
+    left, bottom, total_width, height = rect
+    specs = [
+        ("rotate_left", "Rotate Left"),
+        ("rotate_right", "Rotate Right"),
+        ("front", "Front"),
+        ("side", "Side"),
+        ("top", "Top"),
+        ("isometric", "Isometric"),
+    ]
+    gap = 0.008
+    button_width = (total_width - gap * (len(specs) - 1)) / len(specs)
+
+    def rotate(azimuth_delta: float):
+        def callback(_event) -> None:
+            ax3d.view_init(elev=ax3d.elev, azim=ax3d.azim + azimuth_delta)
+            fig.canvas.draw_idle()
+
+        return callback
+
+    def use_preset(name: str):
+        def callback(_event) -> None:
+            elevation, azimuth = _VIEW_PRESETS[name]
+            ax3d.view_init(elev=elevation, azim=azimuth)
+            fig.canvas.draw_idle()
+
+        return callback
+
+    callbacks = {
+        "rotate_left": rotate(-_VIEW_ROTATION_STEP_DEG),
+        "rotate_right": rotate(_VIEW_ROTATION_STEP_DEG),
+        **{name: use_preset(name) for name in _VIEW_PRESETS},
+    }
+    buttons = {}
+    for index, (name, label) in enumerate(specs):
+        button_ax = fig.add_axes([left + index * (button_width + gap), bottom, button_width, height])
+        button = Button(button_ax, label)
+        button.label.set_fontsize(8)
+        button.on_clicked(callbacks[name])
+        buttons[name] = button
+
+    # Widgets and free-function callbacks must remain strongly referenced.
+    fig._laser_slice_view_axes = ax3d
+    fig._laser_slice_view_buttons = buttons
+    fig._laser_slice_view_callbacks = callbacks
 
 
 # --------------------------------------------------------------------------
@@ -341,6 +398,7 @@ def show_interactive(mesh, layers: list[LayerSlice], sheets: list[SheetLayout], 
     engrave strokes, (3) the sheet layout containing that layer with the
     current part outlined -- driven by a Slider that scrubs the layer index.
     The Up and Down arrow keys advance to the next and previous layer.
+    Buttons rotate the 3D view or switch it to a standard preset.
 
     If no display/interactive backend is available, this prints a message
     and returns normally instead of raising (the caller is expected to have
@@ -365,7 +423,7 @@ def show_interactive(mesh, layers: list[LayerSlice], sheets: list[SheetLayout], 
         bounds = _mesh_bounds(mesh)
 
         fig = plt.figure(figsize=(15, 5.5))
-        gs = fig.add_gridspec(1, 3, bottom=0.22, wspace=0.35)
+        gs = fig.add_gridspec(1, 3, bottom=0.24, wspace=0.35)
         ax3d = fig.add_subplot(gs[0, 0], projection="3d")
         ax2d = fig.add_subplot(gs[0, 1])
         ax_sheet = fig.add_subplot(gs[0, 2])
@@ -463,6 +521,7 @@ def show_interactive(mesh, layers: list[LayerSlice], sheets: list[SheetLayout], 
         fig._laser_slice_state = state
         fig._laser_slice_key_press_handler = key_press_handler
         fig._laser_slice_key_press_connection = key_press_connection
+        _add_3d_view_controls(fig, ax3d, rect=(0.12, 0.13, 0.76, 0.05))
 
         plt.show()
     except Exception as exc:
@@ -503,8 +562,8 @@ def render_stack_preview(stack_mesh, out_path: str) -> None:
 
 def show_stack_preview(stack_mesh) -> None:
     """Best-effort interactive 3D viewer for the physically reconstructed
-    stack. Freely rotate/zoom with the mouse to inspect the assembled
-    object from any angle.
+    stack. Rotate it with buttons or the mouse, zoom with the mouse, or use
+    a preset view to inspect the assembled object from standard angles.
 
     Degrades gracefully (prints a message, returns normally) if no
     display/backend is available, the same as `show_interactive`; the
@@ -522,8 +581,10 @@ def show_stack_preview(stack_mesh) -> None:
         ax = fig.add_subplot(111, projection="3d")
         bounds = _mesh_bounds(stack_mesh)
         _draw_stack_surface(ax, stack_mesh, bounds)
-        ax.set_title("laser_slice stack preview -- drag to rotate")
+        ax.set_title("laser_slice stack preview -- use controls below or drag")
         ax.view_init(elev=18, azim=-60)
+        fig.subplots_adjust(bottom=0.15)
+        _add_3d_view_controls(fig, ax, rect=(0.08, 0.045, 0.84, 0.055))
         plt.show()
     except Exception as exc:
         print(
